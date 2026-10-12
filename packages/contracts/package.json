@@ -1,0 +1,14 @@
+{
+  "name": "@ai-interview/contracts",
+  "version": "1.0.0",
+  "description": "Shared API and event schemas across all services in the AI Interview Platform",
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "scripts": {
+    "build": "tsc",
+    "dev": "tsc --watch"
+  },
+  "devDependencies": {
+    "typescript": "^5.4.5"
+  }
+}

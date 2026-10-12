@@ -1,0 +1,36 @@
+{
+  "name": "ai-interview-platform",
+  "version": "1.0.0",
+  "description": "Production Multi-Agent AI Interview & Evaluation Platform",
+  "private": true,
+  "workspaces": [
+    "apps/*",
+    "services/api-gateway",
+    "services/auth-service",
+    "services/user-service",
+    "services/interview-service",
+    "services/report-service",
+    "services/coding-service",
+    "packages/*"
+  ],
+  "scripts": {
+    "dev": "npm run dev --workspaces --if-present",
+    "build": "npm run build --workspaces --if-present",
+    "test": "npm run test --workspaces --if-present",
+    "lint": "npm run lint --workspaces --if-present",
+    "docker:up": "docker-compose up --build",
+    "docker:down": "docker-compose down",
+    "clean": "npm run clean --workspaces --if-present"
+  },
+  "keywords": [
+    "ai",
+    "interview-platform",
+    "langgraph",
+    "multi-agent",
+    "nextjs",
+    "microservices",
+    "fastapi"
+  ],
+  "author": "",
+  "license": "MIT"
+}

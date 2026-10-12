@@ -1,0 +1,195 @@
+version: '3.8'
+
+services:
+  # ==========================================
+  # INFRASTRUCTURE & SHARED SERVICES
+  # ==========================================
+  postgres:
+    image: postgres:16-alpine
+    container_name: interview_postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-postgres}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-postgres}
+      POSTGRES_DB: ${POSTGRES_DB:-ai_interview_db}
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      - ./infrastructure/docker/postgres-init.sql:/docker-entrypoint-initdb.d/init.sql:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+  redis:
+    image: redis:7-alpine
+    container_name: interview_redis
+    restart: unless-stopped
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis_data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+  rabbitmq:
+    image: rabbitmq:3-management-alpine
+    container_name: interview_rabbitmq
+    restart: unless-stopped
+    environment:
+      RABBITMQ_DEFAULT_USER: ${RABBITMQ_USER:-guest}
+      RABBITMQ_DEFAULT_PASS: ${RABBITMQ_PASSWORD:-guest}
+    ports:
+      - "5672:5672"   # AMQP protocol
+      - "15672:15672" # Management Web UI
+    volumes:
+      - rabbitmq_data:/var/lib/rabbitmq
+
+  # ==========================================
+  # APPLICATION SERVICES
+  # ==========================================
+  api-gateway:
+    build:
+      context: .
+      dockerfile: ./services/api-gateway/Dockerfile
+    container_name: interview_api_gateway
+    restart: unless-stopped
+    ports:
+      - "8000:8000"
+    environment:
+      PORT: 8000
+      JWT_SECRET: ${JWT_SECRET:-super-secret-jwt-key}
+      AUTH_SERVICE_URL: http://auth-service:8001
+      USER_SERVICE_URL: http://user-service:8002
+      INTERVIEW_SERVICE_URL: http://interview-service:8003
+      REPORT_SERVICE_URL: http://report-service:8004
+      CODING_SERVICE_URL: http://coding-service:8005
+      AI_SERVICE_URL: http://ai-service:8006
+    depends_on:
+      redis:
+        condition: service_healthy
+
+  auth-service:
+    build:
+      context: .
+      dockerfile: ./services/auth-service/Dockerfile
+    container_name: interview_auth_service
+    restart: unless-stopped
+    ports:
+      - "8001:8001"
+    environment:
+      PORT: 8001
+      DATABASE_URL: postgresql://${POSTGRES_USER:-postgres}:${POSTGRES_PASSWORD:-postgres}@postgres:5432/${POSTGRES_DB:-ai_interview_db}
+      JWT_SECRET: ${JWT_SECRET:-super-secret-jwt-key}
+    depends_on:
+      postgres:
+        condition: service_healthy
+
+  user-service:
+    build:
+      context: .
+      dockerfile: ./services/user-service/Dockerfile
+    container_name: interview_user_service
+    restart: unless-stopped
+    ports:
+      - "8002:8002"
+    environment:
+      PORT: 8002
+      DATABASE_URL: postgresql://${POSTGRES_USER:-postgres}:${POSTGRES_PASSWORD:-postgres}@postgres:5432/${POSTGRES_DB:-ai_interview_db}
+    depends_on:
+      postgres:
+        condition: service_healthy
+
+  interview-service:
+    build:
+      context: .
+      dockerfile: ./services/interview-service/Dockerfile
+    container_name: interview_session_service
+    restart: unless-stopped
+    ports:
+      - "8003:8003"
+    environment:
+      PORT: 8003
+      DATABASE_URL: postgresql://${POSTGRES_USER:-postgres}:${POSTGRES_PASSWORD:-postgres}@postgres:5432/${POSTGRES_DB:-ai_interview_db}
+      REDIS_URL: redis://redis:6379
+      AI_SERVICE_URL: http://ai-service:8006
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+
+  report-service:
+    build:
+      context: .
+      dockerfile: ./services/report-service/Dockerfile
+    container_name: interview_report_service
+    restart: unless-stopped
+    ports:
+      - "8004:8004"
+    environment:
+      PORT: 8004
+      DATABASE_URL: postgresql://${POSTGRES_USER:-postgres}:${POSTGRES_PASSWORD:-postgres}@postgres:5432/${POSTGRES_DB:-ai_interview_db}
+    depends_on:
+      postgres:
+        condition: service_healthy
+
+  coding-service:
+    build:
+      context: .
+      dockerfile: ./services/coding-service/Dockerfile
+    container_name: interview_coding_service
+    restart: unless-stopped
+    ports:
+      - "8005:8005"
+    environment:
+      PORT: 8005
+      REDIS_URL: redis://redis:6379
+    depends_on:
+      redis:
+        condition: service_healthy
+
+  ai-service:
+    build:
+      context: ./services/ai-service
+      dockerfile: Dockerfile
+    container_name: interview_ai_service
+    restart: unless-stopped
+    ports:
+      - "8006:8006"
+    environment:
+      PORT: 8006
+      OPENAI_API_KEY: ${OPENAI_API_KEY}
+      ANTHROPIC_API_KEY: ${ANTHROPIC_API_KEY}
+      GEMINI_API_KEY: ${GEMINI_API_KEY}
+      DATABASE_URL: postgresql://${POSTGRES_USER:-postgres}:${POSTGRES_PASSWORD:-postgres}@postgres:5432/${POSTGRES_DB:-ai_interview_db}
+      REDIS_URL: redis://redis:6379
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+
+  web:
+    build:
+      context: .
+      dockerfile: ./apps/web/Dockerfile
+    container_name: interview_web
+    restart: unless-stopped
+    ports:
+      - "3000:3000"
+    environment:
+      PORT: 3000
+      NEXT_PUBLIC_API_GATEWAY_URL: http://localhost:8000
+    depends_on:
+      - api-gateway
+
+volumes:
+  postgres_data:
+  redis_data:
+  rabbitmq_data:
